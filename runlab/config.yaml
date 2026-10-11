@@ -1,5 +1,5 @@
 name: RunLab
-version: "0.2.0"
+version: "0.3.0"
 slug: runlab
 description: Privat løbe- og konditionsdashboard med Garmin-import
 url: https://github.com/kiodoa-art/RunLab
@@ -15,6 +15,11 @@ map:
 ingress: true
 ingress_port: 8099
 panel_icon: mdi:run-fast
-ports: {}
-options: {}
-schema: {}
+ports:
+  8099/tcp: null
+ports_description:
+  8099/tcp: "RunLab LAN (aktiveres manuelt)"
+options:
+  runlab_password: ""
+schema:
+  runlab_password: password
