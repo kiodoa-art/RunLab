@@ -31,7 +31,7 @@ def timestamp(v):
 
 def normalize_points(points):
  out=[]
- for p in points:
+ for p in points[:50000]:
   if not isinstance(p,dict): continue
   t=timestamp(p.get('time') or p.get('timestamp') or p.get('date'))
   hr=num(p.get('hr',p.get('heart_rate',p.get('heartRate',p.get('pulse')))))
@@ -44,7 +44,7 @@ def normalize_points(points):
    ms=num(p.get('speed_m_s'))
    if ms is not None:speed=ms*3.6
   out.append({'time':t,'hr':hr,'distance_km':dist,'speed_kmh':speed,'lat':num(p.get('lat',p.get('latitude'))),'lon':num(p.get('lon',p.get('longitude')))})
- return out[:150000]
+ return out
 
 def parse_json(raw):
  d=json.loads(raw)
@@ -78,6 +78,7 @@ def parse_xml(raw):
    elif k=='distancemeters':p['distance_m']=node.text
    elif k=='speed':p['speed_m_s']=node.text
   points.append(p)
+  if len(points)>50000:raise ValueError('For mange målepunkter (maks. 50.000)')
  started=next((p.get('time') for p in points if p.get('time')),None)
  return {'source':'Garmin GPX' if is_gpx else 'Garmin TCX','sport':'running','started':started,'duration_s':None,'distance_km':None,'points':normalize_points(points)}
 
@@ -87,6 +88,7 @@ def parse_fit(raw):
  for m in f.get_messages():
   if m.name=='record':
    p={x.name:x.value for x in m}
+   if len(points)>=50000:raise ValueError('For mange målepunkter (maks. 50.000)')
    points.append({'time':p.get('timestamp'),'hr':p.get('heart_rate'),'distance_m':p.get('distance'),'speed_m_s':p.get('enhanced_speed',p.get('speed'))})
   elif m.name=='session':session={x.name:x.value for x in m}
  return {'source':'Garmin FIT','sport':'running','started':timestamp(session.get('start_time')),'duration_s':num(session.get('total_timer_time')),'distance_km':(num(session.get('total_distance')) or 0)/1000 or None,'points':normalize_points(points)}
@@ -133,11 +135,13 @@ class Handler(BaseHTTPRequestHandler):
   b=p.read_bytes();self.send_response(200);self.send_header('Content-Type',mime+'; charset=utf-8');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
  def do_POST(self):
   if self.path!='/api/import':return self.send(404,{'error':'Ikke fundet'})
-  size=int(self.headers.get('Content-Length','0'))
+  try:size=int(self.headers.get('Content-Length','0'))
+  except ValueError:return self.send(400,{'error':'Ugyldig filstørrelse'})
   if size<1 or size>25*1024*1024:return self.send(413,{'error':'Filen skal være under 25 MB'})
   try:
    raw=self.rfile.read(size);name=self.headers.get('X-Filename','training')[:180]
    digest=hashlib.sha256(raw).hexdigest();ext=name.lower().rsplit('.',1)[-1]
+   if ext not in ('json','tcx','gpx','fit'):return self.send(400,{'error':'Ukendt filformat'})
    a=enrich({'json':parse_json,'tcx':parse_xml,'gpx':parse_xml,'fit':parse_fit}[ext](raw))
    with conn() as c:
     try:
