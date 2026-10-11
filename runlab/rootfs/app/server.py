@@ -1,4 +1,4 @@
-import json, sqlite3, os, hashlib, io, csv, math, re
+import json, sqlite3, os, hashlib, io, csv, math, re, base64, hmac, secrets
 from datetime import datetime, timezone
 from pathlib import Path
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -9,6 +9,15 @@ BASE=Path(__file__).parent
 DATA=Path(os.environ.get('RUNLAB_DATA',str(BASE/'localdata')))
 DATA.mkdir(parents=True,exist_ok=True)
 DB=DATA/'runlab.sqlite3'
+OPTIONS=DATA/'options.json'
+def configured_password():
+ try:
+  return str(json.loads(OPTIONS.read_text()).get('runlab_password',''))
+ except (OSError, ValueError, TypeError):
+  return os.environ.get('RUNLAB_PASSWORD','')
+RUNLAB_PASSWORD=configured_password()
+if len(RUNLAB_PASSWORD)<12:
+ raise SystemExit('RunLab: Angiv runlab_password (mindst 12 tegn) under Konfiguration før opstart.')
 
 def conn():
  c=sqlite3.connect(DB,timeout=20)
@@ -111,10 +120,27 @@ def enrich(a):
  return a
 
 class Handler(BaseHTTPRequestHandler):
+ def authorized(self):
+  header=self.headers.get("Authorization","")
+  if not header.startswith("Basic "):return False
+  try:
+   decoded=base64.b64decode(header[6:],validate=True).decode("utf-8")
+   username,password=decoded.split(":",1)
+   return hmac.compare_digest(username,"runlab") and hmac.compare_digest(password,RUNLAB_PASSWORD)
+  except (ValueError,UnicodeError):return False
+ def require_auth(self):
+  if self.authorized():return False
+  self.send_response(401)
+  self.send_header("WWW-Authenticate",'Basic realm="RunLab", charset="UTF-8"')
+  self.send_header("Cache-Control","no-store")
+  self.send_header("Content-Length","0")
+  self.end_headers()
+  return True
  def send(self,status,obj):
   body=json.dumps(obj,ensure_ascii=False,allow_nan=False).encode()
   self.send_response(status);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Content-Length',str(len(body)));self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(body)
  def do_GET(self):
+  if self.require_auth():return
   path=urlparse(self.path).path
   if path=='/api/activities':
    with conn() as c: rows=c.execute('SELECT id,filename,source,sport,started,duration_s,distance_km,avg_hr,max_hr,avg_speed_kmh,imported FROM activities ORDER BY started DESC').fetchall()
@@ -132,8 +158,9 @@ class Handler(BaseHTTPRequestHandler):
   if name not in ('index.html','app.js','manifest.webmanifest','sw.js'):return self.send(404,{'error':'Ikke fundet'})
   p=BASE/'static'/name
   mime={'index.html':'text/html','app.js':'text/javascript','manifest.webmanifest':'application/manifest+json','sw.js':'text/javascript'}[name]
-  b=p.read_bytes();self.send_response(200);self.send_header('Content-Type',mime+'; charset=utf-8');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
+  b=p.read_bytes();self.send_response(200);self.send_header('Content-Type',mime+'; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
  def do_POST(self):
+  if self.require_auth():return
   if self.path!='/api/import':return self.send(404,{'error':'Ikke fundet'})
   try:size=int(self.headers.get('Content-Length','0'))
   except ValueError:return self.send(400,{'error':'Ugyldig filstørrelse'})
