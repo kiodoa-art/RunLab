@@ -1,42 +1,31 @@
-# RunLab 0.1 – Home Assistant App (første fungerende prototype)
+# RunLab 0.3 – Home Assistant og lokal LAN-adgang
 
-RunLab er en privat PWA med Python-server og SQLite. Importerer FIT, TCX, GPX og et fleksibelt JSON-format.
+RunLab samler løbebånds- og Garmin-træning (JSON, FIT, TCX og GPX) i en lokal SQLite-database på Home Assistant. Ingen cloud-upload.
 
-## Test lokalt (uden Home Assistant)
+## Opdatering fra 0.2
+
+1. Opdater appen til **0.3.0** via Home Assistant → Indstillinger → Apps → RunLab.
+2. Åbn **Konfiguration** og angiv **runlab_password** på mindst 12 tegn. Vælg en unik adgangskode; den gemmes i Home Assistants appindstillinger, ikke i GitHub.
+3. Start appen igen. Både Ingress og direkte adgang kræver nu HTTP Basic-login med brugernavn **runlab** og den valgte adgangskode.
+4. **Valgfrit – kun på et betroet hjemmenetværk:** Under appens **Netværk** kan du tildele containerport **8099/tcp** til værtsport **8099**. Standard er **ikke eksponeret**. Besøg derefter `http://192.168.50.216:8099/` på dit lokale netværk. Kontrollér at din router **ikke** videresender porten, og at du ikke offentliggør den via proxy.
+5. Behold Ingress som sikker standardadgang. Hvis du vil have et selvstændigt appvindue på Windows, kan Chrome-menuen **Gem og del → Opret genvej → Åbn som vindue** bruges, hvor tilgængeligt.
+
+**Vigtig begrænsning:** HTTP på et LAN er **ikke krypteret**, selv med Basic-login. Adgangskoden kan opsnappes på et kompromitteret netværk. Brug ikke denne direkte HTTP-adgang på gæstenet, offentligt Wi-Fi eller internet. En fuldt installerbar PWA med service worker på telefon og almindelig LAN-IP kræver HTTPS med et betroet certifikat. Version 0.3 leverer derfor selvstændig lokal webadgang og appvindue på understøttede computere, men ikke garanteret PWA-installation på mobil. Eksponér ikke port 8099 før du har vurderet dette.
+
+## Drift og datalagring
+
+- Data lagres under `/data/runlab.sqlite3` og bevares ved almindelig app-opdatering.
+- RunLab har ikke adgang til Home Assistants `/config`.
+- Upload er begrænset til 25 MB og højst 50.000 målepunkter pr. fil.
+- Garmin- og løbebåndsformater skal stadig afprøves med rigtige eksportfiler.
+- Brug **Eksportér data** til en manuel JSON-sikkerhedskopi.
+- Ved første opstart efter opdatering **skal adgangskoden angives**, ellers stopper RunLab bevidst med en forklaring i loggen.
+
+## Udvikling lokalt
 
 ```bash
 cd runlab/rootfs/app
-python3 server.py
+RUNLAB_PASSWORD='vælg-en-lang-testkode' python3 server.py
 ```
-Åbn http://localhost:8099. FIT-import kræver `pip install fitparse`.
 
-## Home Assistant OS
-
-Dette er en **kildekodepakke**, ikke en allerede installeret app. For at installere som Home Assistant App:
-
-1. Læg hele repository-indholdet i et GitHub-repository, og erstat placeholder-URL i `repository.yaml` og `runlab/config.yaml` med den rigtige URL.
-2. Home Assistant → Indstillinger → Apps → App-butik → menu → Repositories → tilføj GitHub-repository-URL.
-3. Find RunLab, installér og start.
-4. Åbn `http://DIN-HA-IP:8099` fra dit hjemmenetværk.
-
-**Vigtigt:** Port 8099 er uden login i denne prototype. Den må kun eksponeres på et betroet lokalt netværk. Opret IKKE port-forwarding eller offentlig proxy. PWA-installation på telefon kræver normalt HTTPS (eller localhost); det sættes op i en senere version.
-
-## Datamodel
-
-`/data/runlab.sqlite3` er vedvarende lagring. Eksportér JSON-backup fra knappen i brugerfladen. Der er endnu ikke automatiseret backup eller backup-import.
-
-## Kendte begrænsninger
-
-- FIT/TCX/GPX og JSON håndteres, men Garmin-varianter og eksisterende løbebåndseksport skal valideres med rigtige filer.
-- GPX har ofte ikke distance, puls eller varighed. Ingen opdigtede data tilføjes.
-- FIT/TCX-data har varierende feltindhold, og eksport kan indeholde andet end løb.
-- Diagrammer viser basale træningsdata; avanceret konditionsanalyse, målredigering, automatisk synkronisering, Google Drive-backup, login og sikker ekstern adgang er **ikke** implementeret endnu.
-- Fil-dubletter identificeres ved SHA-256 af filindhold, ikke ved logisk aktivitets-ID.
-- PWA har ingen app-ikoner endnu.
-- Standardinstallationen åbner port 8099 på HA-værten; begræns adgang på netværksniveau.
-
-## JSON-eksempel
-
-```json
-{"started":"2026-10-11T08:00:00+02:00","duration_s":1800,"distance_km":3.2,"points":[{"time":"2026-10-11T08:00:00+02:00","hr":130,"speed_kmh":6.4}]}
-```
+Åbn `http://localhost:8099` og log ind med brugernavnet `runlab`.
