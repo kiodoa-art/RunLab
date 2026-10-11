@@ -9,12 +9,23 @@ BASE=Path(__file__).parent
 DATA=Path(os.environ.get('RUNLAB_DATA',str(BASE/'localdata')))
 DATA.mkdir(parents=True,exist_ok=True)
 DB=DATA/'runlab.sqlite3'
-OPTIONS=DATA/'options.json'
+OPTIONS=Path('/data/options.json')
 def configured_password():
- try:
-  return str(json.loads(OPTIONS.read_text()).get('runlab_password',''))
- except (OSError, ValueError, TypeError):
-  return os.environ.get('RUNLAB_PASSWORD','')
+ candidates=[OPTIONS,DATA/'options.json',Path('/data/config.json')]
+ for candidate in dict.fromkeys(candidates):
+  try:
+   settings=json.loads(candidate.read_text(encoding='utf-8'))
+   if isinstance(settings,dict):
+    password=settings.get('runlab_password','')
+    if isinstance(password,str) and password:
+     print('RunLab: adgangskode læst fra konfiguration (længde %d).'%len(password),flush=True)
+     return password
+    print('RunLab: konfiguration fundet, men adgangskode mangler eller har forkert type.',flush=True)
+  except FileNotFoundError:
+   print('RunLab: konfigurationsfil findes ikke: %s'%candidate,flush=True)
+  except (OSError,ValueError,UnicodeError) as e:
+   print('RunLab: kunne ikke læse konfiguration %s: %s'%(candidate,type(e).__name__),flush=True)
+ return os.environ.get('RUNLAB_PASSWORD','')
 RUNLAB_PASSWORD=configured_password()
 if len(RUNLAB_PASSWORD)<12:
  raise SystemExit('RunLab: Angiv runlab_password (mindst 12 tegn) under Konfiguration før opstart.')
