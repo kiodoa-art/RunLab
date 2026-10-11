@@ -2,7 +2,7 @@ name: RunLab
 version: "0.1.0"
 slug: runlab
 description: Privat løbe- og konditionsdashboard med Garmin-import
-url: https://github.com/your-account/runlab-ha-app
+url: https://github.com/kiodoa-art/RunLab
 arch:
   - aarch64
   - amd64
