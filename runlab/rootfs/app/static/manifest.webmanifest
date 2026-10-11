@@ -1,1 +1,1 @@
-{"name":"RunLab","short_name":"RunLab","description":"Privat træningsanalyse","start_url":"/","display":"standalone","background_color":"#0a111c","theme_color":"#0a111c","lang":"da"}
+{"name":"RunLab","short_name":"RunLab","description":"Privat træningsanalyse","start_url":"./","scope":"./","display":"standalone","background_color":"#0a111c","theme_color":"#0a111c","lang":"da"}
